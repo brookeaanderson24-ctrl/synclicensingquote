@@ -1,0 +1,1825 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sync Quote Request</title>
+<style>
+html { color-scheme: light; }
+body { margin: 0; }
+img { max-width: 100%; }
+/* Layout: sticky top bar; two columns on desktop (form left, pinned one-page preview right); phones get a Form / Preview switch in a slim sticky bar. Black accent, light-only by design. */
+:root {
+  --ink: #111111;
+  --ink-2: #4a4f57;
+  --ink-3: #6b7078;
+  --ground: #f1f2f3;
+  --paper: #ffffff;
+  --line: #d9dcdf;
+  --line-strong: #b4b9bf;
+  --err: #b42318;
+  --warn: #b54708;
+  --note-bg: #eceff3;
+  --note-line: #c6cfd9;
+  --note-ink: #34404d;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-doc: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --topbar-h: 72px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background: var(--paper);
+}
+
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.wrap {
+  max-width: 1280px;
+  margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Top bar */
+.topbar {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 20;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  padding-block: 12px;
+}
+.brand { min-width: 0; }
+.brand h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
+.brand p { margin: 2px 0 0; font-size: 12px; color: var(--ink-2); }
+
+.progress { flex: 1 1 200px; min-width: 0; max-width: 340px; }
+.progress-text { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.progress-text strong { color: var(--ink); }
+.meter { height: 4px; margin-top: 6px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.meter > span { display: block; height: 100%; width: 0; background: var(--ink); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+
+.btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 36px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { background: var(--ground); }
+.btn:disabled { color: var(--ink-3); border-color: var(--line); cursor: not-allowed; }
+.btn-primary { background: var(--ink); border-color: var(--ink); color: #ffffff; }
+.btn-primary:hover:not(:disabled) { background: #2b2e33; }
+.btn-primary:disabled { background: var(--line); border-color: var(--line); color: var(--ink-3); }
+
+/* Phone bar (hidden on desktop) */
+.mobilebar { display: none; }
+.mobilebar-inner { display: grid; gap: 8px; padding-block: 8px; }
+.mobilebar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; }
+.seg button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 36px;
+  padding: 7px 16px;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: #ffffff; }
+.seg button:focus-visible { outline-offset: -3px; outline-color: #ffffff; }
+.seg button[aria-pressed="false"]:focus-visible { outline-color: var(--ink); }
+
+/* Page layout */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  padding-block: 24px 40px;
+}
+.pane-form { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--note-line);
+  border-radius: 6px;
+  background: var(--note-bg);
+  color: var(--note-ink);
+  font-size: 13px;
+}
+.note .ic { flex: none; margin-top: 1px; }
+.note-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-right: 6px; }
+
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; }
+.card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.card-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.card-meta { margin-left: auto; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.card-body { padding: 16px; }
+.slot-empty {
+  margin: 0;
+  padding: 22px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* Form fields */
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.label-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.label-row label { font-size: 13px; font-weight: 600; }
+.tag {
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.tag-req { background: var(--ink); border-color: var(--ink); color: #ffffff; }
+.tag-rec { border-color: var(--ink-3); color: var(--ink-2); }
+.tag-opt { padding-left: 0; padding-right: 0; color: var(--ink-3); }
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.input::placeholder { color: var(--ink-3); }
+.hint { margin: 0; font-size: 12px; color: var(--ink-2); }
+
+.field-full { grid-column: 1 / -1; }
+textarea.input { min-height: 84px; line-height: 1.4; resize: vertical; }
+.check { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 13px; cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); cursor: pointer; }
+.input:disabled { background: var(--ground); color: var(--ink-3); cursor: not-allowed; }
+.meta-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.counter { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.counter.is-near { color: var(--warn); font-weight: 700; }
+
+.group { margin: 0; padding: 0; border: 0; min-width: 0; }
+.group legend { display: block; margin-bottom: 6px; padding: 0; }
+.legend-text { margin-right: 8px; font-size: 13px; font-weight: 600; }
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-top: 8px; }
+.check.box { min-height: 40px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); }
+.check.box:has(input:checked) { border-color: var(--ink); background: var(--ground); }
+.budget-row { display: flex; gap: 8px; }
+.budget-row .input:first-child { flex: 1 1 auto; }
+.budget-row select.input { flex: 0 0 110px; width: 110px; }
+
+/* Messages */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.statusrow { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 6px; }
+.statusbtn {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.statusbtn.err { color: var(--err); }
+.statusbtn.warn { color: var(--warn); }
+.statusbtn:disabled { color: var(--ink-2); text-decoration: none; cursor: default; }
+.input[aria-invalid="true"] { border-color: var(--err); }
+.field-error { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; font-weight: 600; color: var(--err); }
+.field-error svg { flex: none; margin-top: 1px; }
+.rule-id { margin-left: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--ink-3); }
+.item-list { margin: 0; padding: 0; list-style: none; }
+.item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink); }
+.item svg { flex: none; margin-top: 2px; color: var(--warn); }
+
+.exbadge { margin-left: 6px; padding: 3px 6px; border: 1px solid var(--ink); border-radius: 3px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; vertical-align: middle; white-space: nowrap; }
+.note.note-warn { border-color: #e4c28f; background: #fdf3e4; color: #6a3a05; }
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  max-width: min(92vw, 520px);
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 13px;
+}
+.copybox { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(17, 17, 17, 0.45); }
+.copybox-card { width: min(100%, 560px); display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.copybox textarea { min-height: 260px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+
+/* Preview pane */
+.pane-preview {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + var(--topbar-h) + 16px);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--topbar-h) - 32px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.preview-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.preview-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.preview-head span { font-size: 12px; color: var(--ink-2); }
+
+/* The sheet mirrors the US Letter PDF. Sizes use container units so it scales as one page. */
+.sheet {
+  container-type: inline-size;
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 8.5 / 11;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(17, 17, 17, 0.06), 0 8px 20px rgba(17, 17, 17, 0.07);
+  color: #111111;
+  font-family: var(--font-doc);
+}
+.sheet-inner { display: flex; flex-direction: column; gap: 1.5cqw; height: 100%; padding: 5.5cqw 6cqw; overflow: hidden; }
+.sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 3cqw; padding-bottom: 2cqw; border-bottom: 0.5cqw solid #111111; }
+.sheet-title { margin: 0; font-size: 3.6cqw; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; }
+.sheet-sub { margin: 0.8cqw 0 0; font-size: 1.8cqw; color: #4a4f57; }
+.sheet-dates { margin: 0; font-size: 1.6cqw; line-height: 1.5; color: #333333; text-align: right; }
+.sheet-dates dt { color: #6b7078; }
+.sheet-dates dd { margin: 0 0 0.6cqw; font-weight: 700; }
+/* --s is a shrink factor the script lowers only if the content would spill past one page. */
+.sheet-sec { flex: none; display: flex; flex-direction: column; gap: 0.8cqw; }
+.sheet-sec.items-sec { flex: 1 0 auto; }
+.sheet-grid { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.8cqw 2.4cqw; font-size: calc(1.7cqw * var(--s, 1)); line-height: 1.25; }
+.sheet-grid.cols4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.sheet-grid > div { min-width: 0; }
+.sheet-grid .full { grid-column: 1 / -1; }
+.sheet-grid dt { font-size: calc(1.3cqw * var(--s, 1)); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6b7078; }
+.sheet-grid dd { margin: 0; overflow-wrap: anywhere; font-weight: 600; }
+.sheet-song-title { margin: 0; font-size: calc(3.2cqw * var(--s, 1)); font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.sheet-song-artist { margin: 0; font-size: calc(2.2cqw * var(--s, 1)); line-height: 1.2; overflow-wrap: anywhere; }
+.sheet .na { color: #777c84; font-weight: 400; }
+.sheet-items { margin: 0; padding: 0; list-style: none; column-count: 2; column-gap: 3cqw; font-size: calc(1.6cqw * var(--s, 1)); line-height: 1.3; }
+.sheet-items li { position: relative; padding-left: 2cqw; margin-bottom: 0.7cqw; break-inside: avoid; overflow-wrap: anywhere; }
+.sheet-items li::before { content: "\2022"; position: absolute; left: 0.3cqw; }
+.sheet-none { margin: 0; font-size: calc(1.6cqw * var(--s, 1)); line-height: 1.3; color: #333333; }
+.sheet-sec h3 {
+  margin: 0;
+  padding-bottom: 0.6cqw;
+  border-bottom: 0.25cqw solid #cfd2d6;
+  font-size: 1.7cqw;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sheet-sec.terms { padding: 1.4cqw; background: #f1f2f3; }
+.sheet-foot { margin: 0; padding-top: 1.4cqw; border-top: 0.25cqw solid #cfd2d6; font-size: 1.45cqw; line-height: 1.4; color: #4a4f57; }
+
+.items { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.items h3 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+.items p { margin: 0; font-size: 13px; color: var(--ink-2); }
+
+/* Phones: one column, Form / Preview switch, slim sticky bar */
+@media (max-width: 860px) {
+  .topbar { position: static; }
+  .mobilebar {
+    display: block;
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 20;
+    background: var(--paper);
+    border-bottom: 1px solid var(--line);
+  }
+  .actions { margin-left: 0; }
+  .layout { grid-template-columns: minmax(0, 1fr); padding-block: 16px 32px; }
+  .layout[data-view="form"] .pane-preview { display: none; }
+  .layout[data-view="preview"] .pane-form { display: none; }
+  .pane-preview { position: static; max-height: none; overflow: visible; }
+  .sheet { max-width: none; }
+  .input { font-size: 16px; }
+}
+
+/* How this works page */
+.how { max-width: 860px; margin-inline: auto; padding-block: 24px 56px; display: flex; flex-direction: column; gap: 28px; }
+.how > * { min-width: 0; }
+.how h2 { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
+.how h3 { margin: 18px 0 8px; font-size: 14px; font-weight: 700; }
+.how p, .how li { max-width: 68ch; font-size: 14px; line-height: 1.55; color: var(--ink); }
+.how p { margin: 0 0 8px; }
+.how ul, .how ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.how-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.how-top h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.how table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.how th, .how td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.how th { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); background: var(--ground); }
+.how tr:last-child td { border-bottom: 0; }
+.how td:first-child { white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+.how-foot { padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
+
+/* Print: only the one-page sheet, on US Letter */
+@media print {
+  body.how-open .layout { display: none !important; }
+  body.how-open .how .btn { display: none !important; }
+  @page { size: letter; margin: 0; }
+  :root { padding: 0 !important; }
+  html, body { margin: 0; background: #ffffff; }
+  body::before, .topbar, .mobilebar, .pane-form, .preview-head, .items, .toast, .copybox { display: none !important; }
+  .layout, .wrap { display: block; max-width: none; margin: 0; padding: 0; }
+  .layout[data-view] .pane-preview { display: block !important; position: static; max-height: none; overflow: visible; }
+  .sheet { width: 8.5in; height: 10.95in; max-width: none; aspect-ratio: auto; border: 0; box-shadow: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar" id="topbar">
+  <div class="wrap">
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1>Sync Quote Request <span class="exbadge" id="exampleTag" hidden>Example data</span></h1>
+        <p>Composition (sync) rights only</p>
+      </div>
+      <div class="progress" id="progress" role="group" aria-label="Form progress">
+        <div class="progress-text"><strong id="reqDone">0</strong> of <span id="reqTotal">11</span> required fields complete</div>
+        <div class="meter" role="progressbar" aria-label="Required fields complete" aria-valuemin="0" aria-valuemax="11" aria-valuenow="0"><span id="meterFill"></span></div>
+        <div class="statusrow">
+          <button type="button" class="statusbtn err" id="btnFirstError"></button>
+          <button type="button" class="statusbtn warn" id="btnItems"></button>
+        </div>
+      </div>
+      <div class="actions" id="actions">
+        <button type="button" class="btn" id="btnHow">How this works</button>
+        <button type="button" class="btn" id="btnExample">Load example</button>
+        <button type="button" class="btn" id="btnClear">Clear form</button>
+        <button type="button" class="btn" id="btnPrint" disabled>Print</button>
+        <button type="button" class="btn" id="btnCopy">Copy summary</button>
+        <button type="button" class="btn btn-primary" id="btnDownload" disabled title="Available in a later build step">Download PDF</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="mobilebar" aria-label="Phone controls">
+  <div class="wrap">
+    <div class="mobilebar-inner">
+      <div class="mobilebar-row">
+        <div class="seg" role="group" aria-label="Show form or preview">
+          <button type="button" id="tabForm" aria-pressed="true">Form</button>
+          <button type="button" id="tabPreview" aria-pressed="false">Preview</button>
+        </div>
+        <div id="mbDownload"></div>
+      </div>
+      <div id="mbProgress"></div>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap layout" id="layout" data-view="form">
+  <section class="pane-form" aria-label="Request form">
+    <div class="note" role="note">
+      <svg class="ic" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4M8 4.6v.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <p style="margin:0"><span class="note-tag">Note</span>This request covers the composition only. Master use must be requested separately from the recording owner.</p>
+    </div>
+
+    <div class="note" id="noteBudget" role="note" hidden>
+      <svg class="ic" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4M8 4.6v.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <p style="margin:0"><span class="note-tag">Note</span>A budget was entered. The publisher decides whether to quote against it. This app does not calculate or suggest fees.</p>
+    </div>
+
+<div class="note note-warn" id="noteChars" role="note" hidden>
+      <svg class="ic" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1.8 15 14H1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.2v3.6M8 11.7v.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <p style="margin:0"><span class="note-tag">Warning</span><span id="noteCharsText"></span></p>
+    </div>
+
+    <form id="requestForm" novalidate style="display:flex;flex-direction:column;gap:16px">
+      <section class="card" aria-labelledby="h-requester">
+        <div class="card-head"><h2 id="h-requester">Requester</h2><span class="card-meta">7 fields · 3 required</span></div>
+        <div class="card-body">
+          <div class="fields">
+            <div class="field">
+              <div class="label-row"><label for="f-name">Full name</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-name" name="name" type="text" autocomplete="name">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-email">Email</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-email" name="email" type="email" inputmode="email" autocomplete="email" spellcheck="false">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-company">Company</label><span class="tag tag-rec">Recommended</span></div>
+              <input class="input" id="f-company" name="company" type="text" autocomplete="organization">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-role">Role</label><span class="tag tag-rec">Recommended</span></div>
+              <select class="input" id="f-role" name="role">
+                <option value="">Select a role</option>
+                <option>Music supervisor</option>
+                <option>Filmmaker/producer</option>
+                <option>Advertising agency</option>
+                <option>Brand/client</option>
+                <option>Game developer</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-phone">Phone</label><span class="tag tag-opt">Optional</span></div>
+              <input class="input" id="f-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-reqdate">Date of request</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-reqdate" name="requestDate" type="date" aria-describedby="hint-reqdate">
+              <p class="hint" id="hint-reqdate">Starts as today's date. You can change it.</p>
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-needby">Response needed by</label><span class="tag tag-rec">Recommended</span></div>
+              <input class="input" id="f-needby" name="responseNeededBy" type="date" aria-describedby="hint-needby">
+              <p class="hint" id="hint-needby">Cannot be earlier than the date of request.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-song">
+        <div class="card-head"><h2 id="h-song">Song</h2><span class="card-meta">4 fields · 2 required</span></div>
+        <div class="card-body">
+          <div class="fields">
+            <div class="field">
+              <div class="label-row"><label for="f-song">Song title</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-song" name="songTitle" type="text" autocomplete="off">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-artist">Artist</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-artist" name="artist" type="text" autocomplete="off">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-writers">Writer(s)</label><span class="tag tag-rec">Recommended</span></div>
+              <input class="input" id="f-writers" name="writers" type="text" autocomplete="off" aria-describedby="hint-writers">
+              <p class="hint" id="hint-writers">Separate multiple names with commas.</p>
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-publishers">Publisher(s), if known</label><span class="tag tag-rec">Recommended</span></div>
+              <input class="input" id="f-publishers" name="publishers" type="text" autocomplete="off" aria-describedby="hint-publishers">
+              <p class="hint" id="hint-publishers">Helps the publisher route the request.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-project">
+        <div class="card-head"><h2 id="h-project">Project</h2><span class="card-meta">5 fields · 1 required</span></div>
+        <div class="card-body">
+          <div class="fields">
+            <div class="field field-full">
+              <div class="label-row"><label for="f-project">Project name</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-project" name="projectName" type="text" autocomplete="off">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-prodco">Production company / client</label><span class="tag tag-rec">Recommended</span></div>
+              <input class="input" id="f-prodco" name="productionCompany" type="text" autocomplete="off">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-distributor">Distributor / network</label><span class="tag tag-opt">Optional</span></div>
+              <input class="input" id="f-distributor" name="distributor" type="text" autocomplete="off">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-release">Release or air date</label><span class="tag tag-rec">Recommended</span></div>
+              <input class="input" id="f-release" name="releaseDate" type="date">
+              <label class="check" for="f-release-tbd"><input type="checkbox" id="f-release-tbd" name="releaseTbd"><span>Not yet determined</span></label>
+            </div>
+            <div class="field field-full">
+              <div class="label-row"><label for="f-projdesc">Project description</label><span class="tag tag-opt">Optional</span></div>
+              <textarea class="input" id="f-projdesc" name="projectDescription" rows="3" maxlength="300" aria-describedby="hint-projdesc"></textarea>
+              <div class="meta-row"><p class="hint" id="hint-projdesc">Up to 300 characters.</p><span class="counter" id="c-projdesc" hidden></span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-usage">
+        <div class="card-head"><h2 id="h-usage">Usage</h2><span class="card-meta">4 fields · 2 required</span></div>
+        <div class="card-body">
+          <div class="fields">
+            <div class="field">
+              <div class="label-row"><label for="f-usagetype">Usage type</label><span class="tag tag-req">Required</span></div>
+              <select class="input" id="f-usagetype" name="usageType">
+                <option value="">Select a usage type</option>
+                <option>Feature film</option>
+                <option>TV series</option>
+                <option>TV commercial</option>
+                <option>Trailer/promo</option>
+                <option>Video game</option>
+                <option>Web/social</option>
+                <option>Corporate/internal</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-manner">Manner of use</label><span class="tag tag-rec">Recommended</span></div>
+              <select class="input" id="f-manner" name="mannerOfUse">
+                <option value="">Select a manner of use</option>
+                <option>Background instrumental</option>
+                <option>Background vocal</option>
+                <option>Visual vocal</option>
+                <option>Featured</option>
+                <option>Main title</option>
+                <option>End title</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field field-full" id="wrap-usageother" hidden>
+              <div class="label-row"><label for="f-usageother">Describe the other usage type</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-usageother" name="usageTypeOther" type="text" autocomplete="off">
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-duration">Duration of use</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-duration" name="durationSeconds" type="number" inputmode="numeric" min="1" step="1" aria-describedby="hint-duration">
+              <p class="hint" id="hint-duration">In whole seconds, greater than 0.</p>
+            </div>
+            <div class="field field-full">
+              <div class="label-row"><label for="f-scene">Scene / use description</label><span class="tag tag-rec">Recommended</span></div>
+              <textarea class="input" id="f-scene" name="sceneDescription" rows="3" maxlength="300" aria-describedby="hint-scene"></textarea>
+              <div class="meta-row"><p class="hint" id="hint-scene">Up to 300 characters.</p><span class="counter" id="c-scene" hidden></span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-terms">
+        <div class="card-head"><h2 id="h-terms">Terms</h2><span class="card-meta">5 fields · 3 required</span></div>
+        <div class="card-body">
+          <div class="fields">
+            <fieldset class="group field-full" id="grp-media">
+              <legend><span class="legend-text">Media</span><span class="tag tag-req">Required</span></legend>
+              <p class="hint">Select at least one.</p>
+              <div class="checks">
+                <label class="check box"><input type="checkbox" name="media" value="All media"><span>All media</span></label>
+                <label class="check box"><input type="checkbox" name="media" value="Theatrical"><span>Theatrical</span></label>
+                <label class="check box"><input type="checkbox" name="media" value="Broadcast TV"><span>Broadcast TV</span></label>
+                <label class="check box"><input type="checkbox" name="media" value="Streaming/VOD"><span>Streaming/VOD</span></label>
+                <label class="check box"><input type="checkbox" name="media" value="Online/web"><span>Online/web</span></label>
+                <label class="check box"><input type="checkbox" name="media" value="Social"><span>Social</span></label>
+                <label class="check box"><input type="checkbox" name="media" value="Festival"><span>Festival</span></label>
+                <label class="check box"><input type="checkbox" name="media" value="Internal/non-public"><span>Internal/non-public</span></label>
+                <label class="check box"><input type="checkbox" name="media" value="Other"><span>Other</span></label>
+              </div>
+            </fieldset>
+
+            <div class="field">
+              <div class="label-row"><label for="f-territory">Territory</label><span class="tag tag-req">Required</span></div>
+              <select class="input" id="f-territory" name="territory">
+                <option value="">Select a territory</option>
+                <option>Worldwide</option>
+                <option>United States only</option>
+                <option>North America</option>
+                <option>Specific countries/regions</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="label-row"><label for="f-term">Term</label><span class="tag tag-req">Required</span></div>
+              <select class="input" id="f-term" name="term">
+                <option value="">Select a term</option>
+                <option>1 year</option>
+                <option>2 years</option>
+                <option>3 years</option>
+                <option>5 years</option>
+                <option>Perpetuity</option>
+                <option>Custom</option>
+              </select>
+            </div>
+            <div class="field field-full" id="wrap-territoryother" hidden>
+              <div class="label-row"><label for="f-territoryother">Countries or regions requested</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-territoryother" name="territoryOther" type="text" autocomplete="off">
+            </div>
+            <div class="field" id="wrap-termcustom" hidden>
+              <div class="label-row"><label for="f-termmonths">Custom term in months</label><span class="tag tag-req">Required</span></div>
+              <input class="input" id="f-termmonths" name="termMonths" type="number" inputmode="numeric" min="1" step="1" aria-describedby="hint-termmonths">
+              <p class="hint" id="hint-termmonths">In whole months, greater than 0.</p>
+            </div>
+
+            <div class="field">
+              <div class="label-row"><label for="f-exclusivity">Exclusivity</label><span class="tag tag-rec">Recommended</span></div>
+              <select class="input" id="f-exclusivity" name="exclusivity">
+                <option value="">Select exclusivity</option>
+                <option>None</option>
+                <option>Category</option>
+                <option>Full</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field field-full" id="wrap-exclusivitynotes" hidden>
+              <div class="label-row"><label for="f-exclusivitynotes">Exclusivity scope</label><span class="tag tag-rec">Recommended</span></div>
+              <input class="input" id="f-exclusivitynotes" name="exclusivityNotes" type="text" autocomplete="off" aria-describedby="hint-exclusivitynotes">
+              <p class="hint" id="hint-exclusivitynotes">Describe what the exclusivity covers.</p>
+            </div>
+
+            <div class="field field-full">
+              <div class="label-row"><label for="f-budget">Proposed budget</label><span class="tag tag-rec">Recommended</span></div>
+              <div class="budget-row">
+                <input class="input" id="f-budget" name="budget" type="number" inputmode="decimal" min="0" step="any" aria-describedby="hint-budget">
+                <select class="input" id="f-currency" name="currency" aria-label="Currency">
+                  <option>USD</option>
+                  <option>EUR</option>
+                  <option>GBP</option>
+                  <option>CAD</option>
+                  <option>AUD</option>
+                </select>
+              </div>
+              <p class="hint" id="hint-budget">Enter the amount only, without a currency symbol.</p>
+              <label class="check" for="f-nobudget"><input type="checkbox" id="f-nobudget" name="noBudget"><span>No budget set yet</span></label>
+            </div>
+          </div>
+        </div>
+      </section>
+    </form>
+  </section>
+
+  <aside class="pane-preview" aria-label="One-page preview">
+    <div class="preview-head"><h2>Live preview</h2><span>US Letter · 1 page</span></div>
+
+    <article class="sheet" aria-label="Preview of the one-page quote request">
+      <div class="sheet-inner">
+        <header class="sheet-head">
+          <div>
+            <h3 class="sheet-title" style="border:0;padding:0;text-transform:none;letter-spacing:-0.01em;font-size:3.6cqw">Sync License Quote Request</h3>
+            <p class="sheet-sub">Composition (sync) rights only</p>
+          </div>
+          <dl class="sheet-dates">
+            <dt>Date of request</dt><dd id="sh-reqdate">Not specified</dd>
+            <dt>Response needed by</dt><dd id="sh-needby">Not specified</dd>
+          </dl>
+        </header>
+        <section class="sheet-sec">
+          <h3>Requester</h3>
+          <dl class="sheet-grid">
+            <div><dt>Name</dt><dd id="sh-name"></dd></div>
+            <div><dt>Company</dt><dd id="sh-company"></dd></div>
+            <div><dt>Role</dt><dd id="sh-role"></dd></div>
+            <div><dt>Email</dt><dd id="sh-email"></dd></div>
+            <div><dt>Phone</dt><dd id="sh-phone"></dd></div>
+          </dl>
+        </section>
+
+        <section class="sheet-sec">
+          <h3>Song</h3>
+          <p class="sheet-song-title" id="sh-song"></p>
+          <p class="sheet-song-artist" id="sh-artist"></p>
+          <dl class="sheet-grid">
+            <div><dt>Writer(s)</dt><dd id="sh-writers"></dd></div>
+            <div><dt>Publisher(s)</dt><dd id="sh-publishers"></dd></div>
+          </dl>
+        </section>
+
+        <section class="sheet-sec">
+          <h3>Project</h3>
+          <dl class="sheet-grid">
+            <div class="full"><dt>Project name</dt><dd id="sh-project"></dd></div>
+            <div><dt>Production company / client</dt><dd id="sh-prodco"></dd></div>
+            <div><dt>Distributor / network</dt><dd id="sh-distributor"></dd></div>
+            <div><dt>Release or air date</dt><dd id="sh-release"></dd></div>
+            <div class="full"><dt>Description</dt><dd id="sh-projdesc"></dd></div>
+          </dl>
+        </section>
+
+        <section class="sheet-sec">
+          <h3>Usage</h3>
+          <dl class="sheet-grid">
+            <div><dt>Usage type</dt><dd id="sh-usagetype"></dd></div>
+            <div><dt>Manner of use</dt><dd id="sh-manner"></dd></div>
+            <div><dt>Duration of use</dt><dd id="sh-duration"></dd></div>
+            <div class="full"><dt>Scene / use description</dt><dd id="sh-scene"></dd></div>
+          </dl>
+        </section>
+
+        <section class="sheet-sec terms">
+          <h3>Terms</h3>
+          <dl class="sheet-grid cols4">
+            <div class="full"><dt>Media</dt><dd id="sh-media"></dd></div>
+            <div><dt>Territory</dt><dd id="sh-territory"></dd></div>
+            <div><dt>Term</dt><dd id="sh-term"></dd></div>
+            <div><dt>Exclusivity</dt><dd id="sh-exclusivity"></dd></div>
+            <div><dt>Proposed budget</dt><dd id="sh-budget"></dd></div>
+          </dl>
+        </section>
+
+        <section class="sheet-sec items-sec">
+          <h3>Items for publisher to confirm</h3>
+          <ul class="sheet-items" id="sh-items"></ul>
+          <p class="sheet-none" id="sh-none" hidden>No open items flagged by this tool. The publisher may still request additional information.</p>
+        </section>
+        <p class="sheet-foot">This is a quote request only. No fee has been quoted, no license has been granted, and no rights are assumed to be cleared.</p>
+      </div>
+    </article>
+
+    <section class="items" id="itemsPanel" aria-labelledby="h-items" tabindex="-1">
+      <h3 id="h-items">Items for publisher to confirm</h3>
+      <p id="itemsEmpty" hidden>No open items flagged by this tool. The publisher may still request additional information.</p>
+      <ul class="item-list" id="itemList"></ul>
+    </section>
+  </aside>
+</main>
+
+<section class="how wrap" id="howView" aria-labelledby="how-title" hidden>
+  <div class="how-top">
+    <h1 id="how-title">How this works</h1>
+    <button type="button" class="btn" id="btnBackTop">Back to form</button>
+  </div>
+
+  <div>
+    <h2>What this tool is</h2>
+    <p>Sync Quote Request collects the details a music publisher needs before quoting a synchronization (sync) license. It organizes them into a one-page summary that you can download as a PDF and send to the publisher.</p>
+    <p>It runs entirely in your browser. There is no account, no database and no music catalog lookup. Everything on the page comes from what you type.</p>
+  </div>
+
+  <div>
+    <h2>What it does not do</h2>
+    <ul>
+      <li>It never calculates, estimates or suggests a license fee.</li>
+      <li>It never assumes that rights are cleared or that a request will be approved.</li>
+      <li>It does not cover master use. That license is requested separately from the recording owner.</li>
+      <li>It does not send anything, and it does not look up songs, artists or publishers.</li>
+    </ul>
+  </div>
+
+  <div>
+    <h2>How to use it</h2>
+    <ol>
+      <li>Fill in the form. The one-page sheet updates as you type.</li>
+      <li>Check the "Items for publisher to confirm" list and fill any gaps you can.</li>
+      <li>Select Download PDF once every required field is complete.</li>
+      <li>Send the PDF to the publisher from your own email. This tool cannot send or attach files.</li>
+    </ol>
+    <p style="margin-top:8px">Load example fills the form with fictional entries so you can see how it works. Clear form removes everything you entered.</p>
+  </div>
+
+  <div id="rulesBlock">
+    <h2>The rules, in full</h2>
+    <p>Every message below is the exact wording the app uses. These tables are generated from the same list the app checks, so the two cannot disagree. Errors block the PDF. Warnings do not, and they print in the "Items for publisher to confirm" box. Notes appear on screen only.</p>
+    <div id="rulesTables"></div>
+    <p style="margin-top:12px">No rule compares a budget to a typical or market rate, predicts whether a request will be approved, or infers who owns or has cleared any rights.</p>
+  </div>
+
+  <div>
+    <h2>Your data</h2>
+    <p>What you type stays in your browser. Nothing is sent to a server and nothing is saved. Closing or refreshing the page clears the form.</p>
+    <p>When the page opens, it loads one PDF library from a public content delivery network (cdnjs.cloudflare.com). Your entries are not sent there.</p>
+  </div>
+
+  <div>
+    <h2>Known limitations</h2>
+    <ul>
+      <li>The PDF supports Latin letters and accents only. Other scripts print as "?", and the app warns you when that happens.</li>
+      <li>The PDF is always one page, so the project description and scene description are limited to 300 characters each.</li>
+      <li>The tool cannot attach the PDF to an email. You attach it yourself.</li>
+      <li>The only rule based on a number is C4, which asks the publisher to confirm any duration over 300 seconds.</li>
+      <li>The Download PDF button needs the PDF library to load, so the page needs an internet connection when it opens.</li>
+    </ul>
+  </div>
+
+  <div class="how-foot">
+    <p style="margin:0 0 4px">Last updated November 12, 2026.</p>
+    <p style="margin:0 0 12px">This tool provides no legal advice. Actual license terms are set by the publisher.</p>
+    <button type="button" class="btn" id="btnBackBottom">Back to form</button>
+  </div>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<div class="copybox" id="copyBox" role="dialog" aria-modal="true" aria-labelledby="copyBoxTitle" hidden>
+  <div class="copybox-card">
+    <h2 id="copyBoxTitle" style="margin:0;font-size:15px">Copy the summary</h2>
+    <p class="hint" style="margin:0">Your browser blocked automatic copying. Select the text below and copy it.</p>
+    <textarea class="input" id="copyText" readonly></textarea>
+    <div style="display:flex;justify-content:flex-end"><button type="button" class="btn" id="btnCopyClose">Close</button></div>
+  </div>
+</div>
+
+<div class="copybox" id="clearBox" role="dialog" aria-modal="true" aria-labelledby="clearBoxTitle" hidden>
+  <div class="copybox-card">
+    <h2 id="clearBoxTitle" style="margin:0;font-size:15px">Clear the form?</h2>
+    <p class="hint" style="margin:0">Everything you entered will be removed. This cannot be undone.</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button type="button" class="btn" id="btnClearCancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btnClearConfirm">Clear form</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function () {
+  var layout = document.getElementById('layout');
+  var topbar = document.getElementById('topbar');
+  var tabForm = document.getElementById('tabForm');
+  var tabPreview = document.getElementById('tabPreview');
+  var progress = document.getElementById('progress');
+  var btnDownload = document.getElementById('btnDownload');
+  var actions = document.getElementById('actions');
+  var mbDownload = document.getElementById('mbDownload');
+  var mbProgress = document.getElementById('mbProgress');
+  var topbarInner = topbar.querySelector('.topbar-inner');
+  var mq = window.matchMedia('(max-width: 860px)');
+
+  // Nothing is ever submitted anywhere.
+  document.getElementById('requestForm').addEventListener('submit', function (e) { e.preventDefault(); });
+
+  function setView(view) {
+    layout.setAttribute('data-view', view);
+    tabForm.setAttribute('aria-pressed', String(view === 'form'));
+    tabPreview.setAttribute('aria-pressed', String(view === 'preview'));
+  }
+  tabForm.addEventListener('click', function () { setView('form'); });
+  tabPreview.addEventListener('click', function () { setView('preview'); });
+
+  // On phones the progress meter and Download button sit in the slim sticky bar.
+  function place() {
+    if (mq.matches) {
+      mbProgress.appendChild(progress);
+      mbDownload.appendChild(btnDownload);
+    } else {
+      topbarInner.insertBefore(progress, actions);
+      actions.appendChild(btnDownload);
+    }
+    measure();
+  }
+
+  // The pinned preview sits just below the sticky top bar, so keep its height in a variable.
+  function measure() {
+    var h = mq.matches ? 0 : topbar.offsetHeight;
+    document.documentElement.style.setProperty('--topbar-h', h + 'px');
+  }
+
+  if (mq.addEventListener) mq.addEventListener('change', place); else mq.addListener(place);
+  if (window.ResizeObserver) new ResizeObserver(measure).observe(topbar);
+  place();
+
+  // Date of request starts as today's date (the viewer's local date) and stays editable.
+  var reqDate = document.getElementById('f-reqdate');
+  var needBy = document.getElementById('f-needby');
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function syncMin() {
+    if (reqDate.value) needBy.min = reqDate.value; else needBy.removeAttribute('min');
+  }
+  if (!reqDate.value) {
+    var now = new Date();
+    reqDate.value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  }
+  reqDate.addEventListener('input', syncMin);
+  syncMin();
+
+  // The extra box for "Other" usage appears only when "Other" is chosen.
+  var usageType = document.getElementById('f-usagetype');
+  var otherWrap = document.getElementById('wrap-usageother');
+  function syncOther() { otherWrap.hidden = usageType.value !== 'Other'; }
+  usageType.addEventListener('change', syncOther);
+  syncOther();
+
+  // "Not yet determined" turns off and clears the release date.
+  var release = document.getElementById('f-release');
+  var releaseTbd = document.getElementById('f-release-tbd');
+  function syncRelease() {
+    if (releaseTbd.checked) release.value = '';
+    release.disabled = releaseTbd.checked;
+  }
+  releaseTbd.addEventListener('change', syncRelease);
+  syncRelease();
+
+  // Character counters show only when the text nears the 300 limit.
+  function bindCounter(fieldId, counterId) {
+    var field = document.getElementById(fieldId);
+    var counter = document.getElementById(counterId);
+    var limit = field.maxLength;
+    var showAt = Math.floor(limit * 0.8);
+    var warnAt = limit - 15;
+    function update() {
+      var n = field.value.length;
+      counter.hidden = n < showAt;
+      counter.textContent = n + ' / ' + limit;
+      counter.classList.toggle('is-near', n >= warnAt);
+    }
+    field.addEventListener('input', update);
+    update();
+  }
+  bindCounter('f-projdesc', 'c-projdesc');
+  bindCounter('f-scene', 'c-scene');
+
+  // Extra boxes appear only when the choice above them needs one.
+  function showWhen(selectId, wrapId, test) {
+    var select = document.getElementById(selectId);
+    var wrap = document.getElementById(wrapId);
+    function update() { wrap.hidden = !test(select.value); }
+    select.addEventListener('change', update);
+    update();
+  }
+  showWhen('f-territory', 'wrap-territoryother', function (v) { return v === 'Specific countries/regions'; });
+  showWhen('f-term', 'wrap-termcustom', function (v) { return v === 'Custom'; });
+  showWhen('f-exclusivity', 'wrap-exclusivitynotes', function (v) { return v !== '' && v !== 'None'; });
+
+  // "No budget set yet" turns off and clears the amount.
+  var budget = document.getElementById('f-budget');
+  var currency = document.getElementById('f-currency');
+  var noBudget = document.getElementById('f-nobudget');
+  function syncBudget() {
+    if (noBudget.checked) budget.value = '';
+    budget.disabled = noBudget.checked;
+    currency.disabled = noBudget.checked;
+  }
+  noBudget.addEventListener('change', syncBudget);
+  syncBudget();
+
+  // ---------- Rules ----------
+  // One list drives the progress meter, the messages and the items panel.
+  // The "How this works" page will read from this same list.
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function blank(s) { return !s || !String(s).trim(); }
+  function wholePositive(s) { s = String(s || '').trim(); return /^\d+$/.test(s) && parseInt(s, 10) > 0; }
+  function hasMedia(v, m) { return v.media.indexOf(m) !== -1; }
+
+  var RULES = [
+    // Errors: a required field is missing or invalid. These block the PDF.
+    { id: 'E1', level: 'error', target: 'f-name', text: 'Requester name is required so the publisher knows who to reply to.', hit: function (v) { return blank(v.name); } },
+    { id: 'E2', level: 'error', target: 'f-email', text: 'Email is required so the publisher can send a quote.', hit: function (v) { return blank(v.email); } },
+    { id: 'E3', level: 'error', target: 'f-email', text: 'Enter a valid email address.', hit: function (v) { return !blank(v.email) && !EMAIL_RE.test(v.email.trim()); } },
+    { id: 'E4', level: 'error', target: 'f-reqdate', text: 'Date of request is required.', hit: function (v) { return blank(v.reqDate); } },
+    { id: 'E5', level: 'error', target: 'f-song', text: 'Song title is required.', hit: function (v) { return blank(v.song); } },
+    { id: 'E6', level: 'error', target: 'f-artist', text: 'Artist is required.', hit: function (v) { return blank(v.artist); } },
+    { id: 'E7', level: 'error', target: 'f-project', text: 'Project name is required.', hit: function (v) { return blank(v.project); } },
+    { id: 'E8', level: 'error', target: 'f-usagetype', text: 'Select a usage type.', hit: function (v) { return blank(v.usageType); } },
+    { id: 'E9', level: 'error', target: 'f-usageother', text: "Describe the 'Other' usage type.", hit: function (v) { return v.usageType === 'Other' && blank(v.usageOther); } },
+    { id: 'E10', level: 'error', target: 'f-duration', text: 'Enter the duration of use in whole seconds (greater than 0).', hit: function (v) { return !wholePositive(v.duration); } },
+    { id: 'E11', level: 'error', target: 'grp-media', text: 'Select at least one media type.', hit: function (v) { return v.media.length === 0; } },
+    { id: 'E12', level: 'error', target: 'f-territory', text: 'Select a territory.', hit: function (v) { return blank(v.territory); } },
+    { id: 'E13', level: 'error', target: 'f-territoryother', text: 'List the countries or regions requested.', hit: function (v) { return v.territory === 'Specific countries/regions' && blank(v.territoryOther); } },
+    { id: 'E14', level: 'error', target: 'f-term', text: 'Select a term.', hit: function (v) { return blank(v.term); } },
+    { id: 'E15', level: 'error', target: 'f-termmonths', text: 'Enter the custom term in whole months (greater than 0).', hit: function (v) { return v.term === 'Custom' && !wholePositive(v.termMonths); } },
+    { id: 'E16', level: 'error', target: 'f-needby', text: "The response date can't be before the request date.", hit: function (v) { return !blank(v.needBy) && !blank(v.reqDate) && v.needBy < v.reqDate; } },
+    { id: 'E17', level: 'error', target: 'f-budget', text: "Budget can't be negative.", hit: function (v) { return !blank(v.budget) && parseFloat(v.budget) < 0; } },
+
+    // Warnings, missing recommended fields. The PDF still exports.
+    { id: 'W1', level: 'warning', group: 'missing', text: 'Requester company not provided.', hit: function (v) { return blank(v.company); } },
+    { id: 'W2', level: 'warning', group: 'missing', text: 'Requester role not provided.', hit: function (v) { return blank(v.role); } },
+    { id: 'W3', level: 'warning', group: 'missing', text: 'No response deadline given.', hit: function (v) { return blank(v.needBy); } },
+    { id: 'W4', level: 'warning', group: 'missing', text: 'Writers not provided.', hit: function (v) { return blank(v.writers); } },
+    { id: 'W5', level: 'warning', group: 'missing', text: 'Publisher not provided; the request may need to be routed.', hit: function (v) { return blank(v.publishers); } },
+    { id: 'W6', level: 'warning', group: 'missing', text: 'Production company or client not provided.', hit: function (v) { return blank(v.prodco); } },
+    { id: 'W7', level: 'warning', group: 'missing', text: 'Release or air date not provided.', hit: function (v) { return blank(v.release) && !v.releaseTbd; } },
+    { id: 'W8', level: 'warning', group: 'missing', text: 'Manner of use not specified (background, featured, etc.).', hit: function (v) { return blank(v.manner); } },
+    { id: 'W9', level: 'warning', group: 'missing', text: 'No scene or use description provided.', hit: function (v) { return blank(v.scene); } },
+    { id: 'W10', level: 'warning', group: 'missing', text: 'Exclusivity not specified.', hit: function (v) { return blank(v.exclusivity); } },
+    { id: 'W11', level: 'warning', group: 'missing', text: 'Exclusivity scope not described.', hit: function (v) { return !blank(v.exclusivity) && v.exclusivity !== 'None' && blank(v.exclusivityNotes); } },
+    { id: 'W12', level: 'warning', group: 'missing', text: 'No proposed budget provided.', hit: function (v) { return blank(v.budget) && !v.noBudget; } },
+
+    // Warnings, consistency checks. Phrased as questions for the publisher. They wait until the fields they compare are filled in.
+    // (C7 cannot occur: the form turns off the amount when "No budget set yet" is checked.)
+    { id: 'C1', level: 'warning', group: 'consistency', text: 'Term is perpetual but media is limited. Please confirm the intended scope.', hit: function (v) { return v.term === 'Perpetuity' && v.media.length > 0 && !hasMedia(v, 'All media'); } },
+    { id: 'C2', level: 'warning', group: 'consistency', text: "'All media' is selected alongside specific media. Please clarify which applies.", hit: function (v) { return hasMedia(v, 'All media') && v.media.length > 1; } },
+    { id: 'C3', level: 'warning', group: 'consistency', text: 'Usage type suggests public release but media is internal only. Please confirm.', hit: function (v) { return ['Feature film', 'TV series', 'Trailer/promo'].indexOf(v.usageType) !== -1 && v.media.length === 1 && v.media[0] === 'Internal/non-public'; } },
+    { id: 'C4', level: 'warning', group: 'consistency', text: 'Duration exceeds 5 minutes. Please confirm the figure is in seconds.', hit: function (v) { var d = parseFloat(v.duration); return isFinite(d) && d > 300; } },
+    { id: 'C5', level: 'warning', group: 'consistency', text: 'Territory is US only but media includes online delivery. Please confirm how territory will be handled.', hit: function (v) { return v.territory === 'United States only' && (hasMedia(v, 'Streaming/VOD') || hasMedia(v, 'Online/web')); } },
+    { id: 'C6', level: 'warning', group: 'consistency', text: 'Release date is already in the past. Please confirm whether this is a retroactive request.', hit: function (v) { return !blank(v.release) && !blank(v.reqDate) && v.release < v.reqDate; } },
+    { id: 'C8', level: 'warning', group: 'consistency', text: 'Full exclusivity requested with limited territory. Please confirm the scope.', hit: function (v) { return v.exclusivity === 'Full' && !blank(v.territory) && v.territory !== 'Worldwide'; } },
+
+    // Notes: on screen only, never on the PDF.
+    { id: 'N1', level: 'note', text: 'A budget was entered. The publisher decides whether to quote against it. This app does not calculate or suggest fees.', hit: function (v) { return !blank(v.budget); } },
+    { id: 'N2', level: 'note', text: 'This request covers the composition only. Master use must be requested separately from the recording owner.', hit: function () { return true; } }
+  ];
+
+  // The required fields the progress meter counts. Conditional ones count only once they apply.
+  var REQUIRED = [
+    { rules: ['E1'] }, { rules: ['E2', 'E3'] }, { rules: ['E4'] }, { rules: ['E5'] }, { rules: ['E6'] }, { rules: ['E7'] },
+    { rules: ['E8'] },
+    { rules: ['E9'], when: function (v) { return v.usageType === 'Other'; } },
+    { rules: ['E10'] }, { rules: ['E11'] }, { rules: ['E12'] },
+    { rules: ['E13'], when: function (v) { return v.territory === 'Specific countries/regions'; } },
+    { rules: ['E14'] },
+    { rules: ['E15'], when: function (v) { return v.term === 'Custom'; } }
+  ];
+
+  var ERROR_TARGETS = [];
+  RULES.forEach(function (r) { if (r.level === 'error' && ERROR_TARGETS.indexOf(r.target) === -1) ERROR_TARGETS.push(r.target); });
+
+  // ---------- Reading the form ----------
+  function el(id) { return document.getElementById(id); }
+  function read() {
+    var media = [];
+    document.querySelectorAll('input[name="media"]:checked').forEach(function (c) { media.push(c.value); });
+    return {
+      name: el('f-name').value, email: el('f-email').value, company: el('f-company').value, role: el('f-role').value,
+      reqDate: el('f-reqdate').value, needBy: el('f-needby').value,
+      song: el('f-song').value, artist: el('f-artist').value, writers: el('f-writers').value, publishers: el('f-publishers').value,
+      project: el('f-project').value, prodco: el('f-prodco').value, release: el('f-release').value, releaseTbd: el('f-release-tbd').checked,
+      usageType: el('f-usagetype').value, usageOther: el('f-usageother').value, manner: el('f-manner').value,
+      duration: el('f-duration').value, scene: el('f-scene').value,
+      media: media, territory: el('f-territory').value, territoryOther: el('f-territoryother').value,
+      term: el('f-term').value, termMonths: el('f-termmonths').value,
+      exclusivity: el('f-exclusivity').value, exclusivityNotes: el('f-exclusivitynotes').value,
+      budget: el('f-budget').value, noBudget: el('f-nobudget').checked
+    };
+  }
+  function evaluate(v) {
+    var out = { errors: [], warnings: [], notes: [] };
+    RULES.forEach(function (r) {
+      if (!r.hit(v)) return;
+      if (r.level === 'error') out.errors.push(r); else if (r.level === 'warning') out.warnings.push(r); else out.notes.push(r);
+    });
+    return out;
+  }
+
+  // ---------- Showing messages ----------
+  var ERR_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.4v4.2M8 11v.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  var WARN_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.8 15 14H1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6.2v3.6M8 11.7v.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+
+  var touched = {};      // fields the person has already left
+  var attempted = false; // set when they ask to see everything that is missing
+  function pdfReady() { return !!(window.jspdf && window.jspdf.jsPDF); }
+
+  function describe(control, id, on) {
+    var ids = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+    var at = ids.indexOf(id);
+    if (on && at === -1) ids.push(id);
+    if (!on && at !== -1) ids.splice(at, 1);
+    if (ids.length) control.setAttribute('aria-describedby', ids.join(' ')); else control.removeAttribute('aria-describedby');
+    if (control.tagName !== 'FIELDSET') {
+      if (on) control.setAttribute('aria-invalid', 'true'); else control.removeAttribute('aria-invalid');
+    }
+  }
+
+  function showInlineError(target, rule) {
+    var control = el(target);
+    var boxId = 'err-' + target;
+    var box = el(boxId);
+    if (!rule) {
+      if (box) { box.hidden = true; box.setAttribute('data-rule', ''); }
+      describe(control, boxId, false);
+      return;
+    }
+    if (!box) {
+      box = document.createElement('p');
+      box.id = boxId;
+      box.className = 'field-error';
+      box.setAttribute('aria-live', 'polite');
+      (control.classList.contains('group') ? control : control.closest('.field')).appendChild(box);
+    }
+    if (box.getAttribute('data-rule') !== rule.id) {
+      box.innerHTML = ERR_SVG;
+      var tag = document.createElement('span'); tag.className = 'sr-only'; tag.textContent = 'Error: ';
+      var msg = document.createElement('span'); msg.textContent = rule.text;
+      var code = document.createElement('span'); code.className = 'rule-id'; code.textContent = rule.id;
+      box.appendChild(tag); box.appendChild(msg); box.appendChild(code);
+      box.setAttribute('data-rule', rule.id);
+    }
+    box.hidden = false;
+    describe(control, boxId, true);
+  }
+
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  function firstErrorTarget(errors) {
+    var targets = errors.map(function (r) { return r.target; });
+    targets.sort(function (a, b) {
+      return (el(a).compareDocumentPosition(el(b)) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1;
+    });
+    return targets[0];
+  }
+
+  // ---------- Live preview ----------
+  // The sheet shows only what was typed. Blank entries print "Not provided".
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function fmtDate(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+    return m ? MONTHS[parseInt(m[2], 10) - 1] + ' ' + parseInt(m[3], 10) + ', ' + m[1] : '';
+  }
+  function put(id, text, fallback) {
+    var node = el(id);
+    var t = (text || '').trim();
+    node.textContent = t || fallback || 'Not provided';
+    node.classList.toggle('na', !t);
+  }
+
+  function updatePreview(v, res) {
+    put('sh-reqdate', fmtDate(v.reqDate), 'Not specified');
+    put('sh-needby', fmtDate(v.needBy), 'Not specified');
+
+    put('sh-name', v.name);
+    put('sh-company', v.company);
+    put('sh-role', v.role);
+    put('sh-email', v.email);
+    put('sh-phone', el('f-phone').value);
+
+    put('sh-song', v.song);
+    put('sh-artist', v.artist);
+    put('sh-writers', v.writers);
+    put('sh-publishers', v.publishers);
+
+    put('sh-project', v.project);
+    put('sh-prodco', v.prodco);
+    put('sh-distributor', el('f-distributor').value);
+    put('sh-release', v.releaseTbd ? 'To be determined' : fmtDate(v.release));
+    put('sh-projdesc', el('f-projdesc').value);
+
+    var usage = v.usageType;
+    if (v.usageType === 'Other' && !blank(v.usageOther)) usage = 'Other: ' + v.usageOther.trim();
+    put('sh-usagetype', usage);
+    put('sh-manner', v.manner);
+    var dur = '';
+    if (!blank(v.duration)) {
+      if (wholePositive(v.duration)) {
+        var secs = parseInt(v.duration, 10);
+        dur = secs + (secs === 1 ? ' second' : ' seconds');
+      } else {
+        dur = v.duration.trim();
+      }
+    }
+    put('sh-duration', dur);
+    put('sh-scene', v.scene);
+
+    put('sh-media', v.media.join(', '));
+    var territory = v.territory;
+    if (v.territory === 'Specific countries/regions' && !blank(v.territoryOther)) territory = 'Specific countries/regions: ' + v.territoryOther.trim();
+    put('sh-territory', territory);
+    var term = v.term;
+    if (v.term === 'Custom' && !blank(v.termMonths)) term = 'Custom: ' + v.termMonths.trim() + ' months';
+    put('sh-term', term);
+    var excl = v.exclusivity;
+    if (!blank(v.exclusivity) && v.exclusivity !== 'None' && !blank(v.exclusivityNotes)) excl = v.exclusivity + ': ' + v.exclusivityNotes.trim();
+    put('sh-exclusivity', excl);
+    var bud = '';
+    if (v.noBudget) {
+      bud = 'No budget set yet';
+    } else if (!blank(v.budget)) {
+      var n = parseFloat(v.budget);
+      var amount = (isFinite(n) && n >= 0) ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : v.budget.trim();
+      bud = amount + ' ' + el('f-currency').value;
+    }
+    put('sh-budget', bud);
+
+    var ul = el('sh-items');
+    ul.textContent = '';
+    res.warnings.forEach(function (r) {
+      var li = document.createElement('li');
+      li.textContent = r.text;
+      ul.appendChild(li);
+    });
+    el('sh-none').hidden = res.warnings.length !== 0;
+
+    fitSheet();
+  }
+
+  // If the content would spill past one page, shrink the sheet text a little at a time.
+  function fitSheet() {
+    var sheet = document.querySelector('.sheet');
+    var inner = document.querySelector('.sheet-inner');
+    var s = 1;
+    sheet.style.setProperty('--s', s);
+    while (inner.scrollHeight > inner.clientHeight + 1 && s > 0.55) {
+      s = Math.round((s - 0.05) * 100) / 100;
+      sheet.style.setProperty('--s', s);
+    }
+  }
+  if (window.ResizeObserver) new ResizeObserver(fitSheet).observe(document.querySelector('.sheet'));
+
+  var lastErrors = [];
+
+  function render() {
+    var v = read();
+    var res = evaluate(v);
+    lastErrors = res.errors;
+
+    // Progress meter
+    var total = 0, done = 0;
+    REQUIRED.forEach(function (item) {
+      if (item.when && !item.when(v)) return;
+      total++;
+      var unmet = res.errors.some(function (r) { return item.rules.indexOf(r.id) !== -1; });
+      if (!unmet) done++;
+    });
+    el('reqDone').textContent = done;
+    el('reqTotal').textContent = total;
+    var meter = document.querySelector('.meter');
+    meter.setAttribute('aria-valuemax', total);
+    meter.setAttribute('aria-valuenow', done);
+    el('meterFill').style.width = (total ? (done / total) * 100 : 0) + '%';
+
+    // Status links
+    var unmetCount = total - done;
+    var btnErr = el('btnFirstError');
+    if (res.errors.length === 0) {
+      btnErr.textContent = 'No required fields remaining';
+      btnErr.disabled = true;
+    } else {
+      btnErr.textContent = (res.errors.length === unmetCount)
+        ? plural(unmetCount, 'required field', 'required fields') + ' remaining'
+        : plural(res.errors.length, 'item', 'items') + ' to fix';
+      btnErr.disabled = false;
+    }
+    var btnItems = el('btnItems');
+    btnItems.textContent = res.warnings.length === 0 ? 'No items to confirm' : plural(res.warnings.length, 'item', 'items') + ' to confirm';
+    btnItems.disabled = res.warnings.length === 0;
+
+    // Messages under fields (only after the person has left the field, or asked to see everything)
+    var firstPerTarget = {};
+    res.errors.forEach(function (r) { if (!firstPerTarget[r.target]) firstPerTarget[r.target] = r; });
+    ERROR_TARGETS.forEach(function (t) {
+      var r = firstPerTarget[t];
+      showInlineError(t, r && (touched[t] || attempted) ? r : null);
+    });
+
+    // Items for publisher to confirm
+    var list = el('itemList');
+    list.textContent = '';
+    res.warnings.forEach(function (r) {
+      var li = document.createElement('li');
+      li.className = 'item';
+      li.innerHTML = WARN_SVG;
+      var tag = document.createElement('span'); tag.className = 'sr-only'; tag.textContent = 'Warning: ';
+      var msg = document.createElement('span'); msg.textContent = r.text;
+      var code = document.createElement('span'); code.className = 'rule-id'; code.textContent = r.id;
+      var body = document.createElement('span');
+      body.appendChild(tag); body.appendChild(msg); body.appendChild(code);
+      li.appendChild(body);
+      list.appendChild(li);
+    });
+    el('itemsEmpty').hidden = res.warnings.length !== 0;
+
+    // Budget note (N1)
+    el('noteBudget').hidden = !res.notes.some(function (r) { return r.id === 'N1'; });
+
+    // One-page preview
+    updatePreview(v, res);
+    updateCharNote();
+
+    // Export buttons. Download and Print wait for zero errors. Copy summary is always on.
+    var clean = res.errors.length === 0;
+    btnDownload.disabled = !(clean && pdfReady());
+    btnDownload.title = !clean ? 'Complete the required fields first' : (pdfReady() ? '' : 'The PDF library could not load. Check your connection and reload.');
+    el('btnPrint').disabled = !clean;
+    el('btnPrint').title = clean ? '' : 'Complete the required fields first';
+  }
+
+  // ---------- Exports: PDF, copied summary, print ----------
+  var NONE_TEXT = 'No open items flagged by this tool. The publisher may still request additional information.';
+  var FOOTER_TEXT = 'This is a quote request only. No fee has been quoted, no license has been granted, and no rights are assumed to be cleared.';
+
+  // The text each entry shows on the sheet, read back from the preview so the PDF and the
+  // copied summary always match it. A blank entry comes back as ''.
+  function display() {
+    function g(id) { var n = el(id); return n.classList.contains('na') ? '' : n.textContent; }
+    return {
+      reqDate: g('sh-reqdate'), needBy: g('sh-needby'),
+      name: g('sh-name'), company: g('sh-company'), role: g('sh-role'), email: g('sh-email'), phone: g('sh-phone'),
+      song: g('sh-song'), artist: g('sh-artist'), writers: g('sh-writers'), publishers: g('sh-publishers'),
+      project: g('sh-project'), prodco: g('sh-prodco'), distributor: g('sh-distributor'), release: g('sh-release'), projdesc: g('sh-projdesc'),
+      usageType: g('sh-usagetype'), manner: g('sh-manner'), duration: g('sh-duration'), scene: g('sh-scene'),
+      media: g('sh-media'), territory: g('sh-territory'), term: g('sh-term'), exclusivity: g('sh-exclusivity'), budget: g('sh-budget')
+    };
+  }
+
+  // The built-in PDF font covers Latin letters and accents. A few common symbols are swapped for plain ones.
+  var SWAP = { '‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-', '…': '...', '•': '*', '€': 'EUR', '™': 'TM', ' ': ' ' };
+  function mapChar(ch) {
+    if (Object.prototype.hasOwnProperty.call(SWAP, ch)) return SWAP[ch];
+    var c = ch.codePointAt(0);
+    if (c === 9 || c === 10 || c === 13) return ' ';
+    if (c < 32 || (c >= 127 && c <= 159) || c > 255) return null;
+    return ch;
+  }
+  function pdfText(s) {
+    return Array.from(String(s)).map(function (ch) { var m = mapChar(ch); return m === null ? '?' : m; }).join('');
+  }
+  function updateCharNote() {
+    var d = display();
+    var bad = [];
+    Object.keys(d).forEach(function (k) {
+      Array.from(d[k]).forEach(function (ch) { if (mapChar(ch) === null && bad.indexOf(ch) === -1) bad.push(ch); });
+    });
+    el('noteChars').hidden = bad.length === 0;
+    if (bad.length) {
+      el('noteCharsText').textContent = 'Some characters cannot be printed in the PDF and will appear as "?": ' + bad.slice(0, 10).join(' ') + (bad.length > 10 ? ' and more' : '') + '. The PDF supports Latin letters and accents only.';
+    }
+  }
+
+  function fileName(d) {
+    function clean(s, fallback) {
+      var c = String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '');
+      return (c || fallback).slice(0, 30);
+    }
+    return 'SyncQuoteRequest_' + clean(d.song, 'Song') + '_' + clean(d.project, 'Project') + '.pdf';
+  }
+
+  // ----- PDF: drawn directly at US Letter size in points (72 points = 1 inch) -----
+  var PAGE = { w: 612, h: 792, m: 40 };
+  var C_INK = [17, 17, 17], C_GRAY = [107, 112, 120], C_NA = [119, 124, 132], C_SUB = [74, 79, 87], C_RULE = [207, 210, 214], C_SHADE = [241, 242, 243];
+
+  function buildPdf(res, d) {
+    var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' });
+    doc.setProperties({ title: 'Sync License Quote Request' });
+    doc.setLineHeightFactor(1.22);
+    var W = PAGE.w - PAGE.m * 2;
+    var scale = 1; // lowered only if the content would not fit on one page
+
+    function sz(pt) { return pt * scale; }
+    function lh(pt) { return pt * scale * 1.22; }
+    function font(style, pt, color) { doc.setFont('helvetica', style); doc.setFontSize(sz(pt)); doc.setTextColor(color[0], color[1], color[2]); }
+    function wrap(text, style, pt, width) { doc.setFont('helvetica', style); doc.setFontSize(sz(pt)); return doc.splitTextToSize(pdfText(text), width); }
+    function hr(x, y, w, rgb, weight) { doc.setDrawColor(rgb[0], rgb[1], rgb[2]); doc.setLineWidth(weight); doc.line(x, y, x + w, y); }
+
+    // A section title with a thin rule under it. Returns its height.
+    function head(title, x, y, w, dr) {
+      if (dr) {
+        font('bold', 8.5, C_INK);
+        doc.text(title.toUpperCase(), x, y + sz(8.5), { charSpace: 0.7 * scale });
+        hr(x, y + lh(8.5) + 1, w, C_RULE, 0.6);
+      }
+      return lh(8.5) + 5 * scale;
+    }
+
+    // Label and value pairs in columns. Items may span several columns. Returns total height.
+    function grid(items, cols, x, y, w, dr) {
+      var gap = 12 * scale;
+      var colW = (w - gap * (cols - 1)) / cols;
+      var yy = y, i = 0;
+      while (i < items.length) {
+        var row = [], used = 0;
+        while (i < items.length) {
+          var span = Math.min(items[i].span || 1, cols);
+          if (used + span > cols) break;
+          row.push({ it: items[i], span: span, col: used });
+          used += span;
+          i++;
+        }
+        var rowH = 0;
+        row.forEach(function (r) {
+          var cw = colW * r.span + gap * (r.span - 1);
+          r.na = !r.it.value;
+          r.lines = wrap(r.na ? 'Not provided' : r.it.value, r.na ? 'normal' : 'bold', 9, cw);
+          rowH = Math.max(rowH, lh(6.8) + r.lines.length * lh(9));
+        });
+        if (dr) {
+          row.forEach(function (r) {
+            var cx = x + r.col * (colW + gap);
+            font('bold', 6.8, C_GRAY);
+            doc.text(r.it.label.toUpperCase(), cx, yy + sz(6.8), { charSpace: 0.4 * scale });
+            font(r.na ? 'normal' : 'bold', 9, r.na ? C_NA : C_INK);
+            doc.text(r.lines, cx, yy + lh(6.8) + sz(9));
+          });
+        }
+        yy += rowH + 4 * scale;
+      }
+      return yy - y - 4 * scale;
+    }
+
+    // A titled block. The body is measured first so a shaded block can be filled before its text.
+    function block(title, shaded, body, y, dr) {
+      var pad = shaded ? 8 * scale : 0;
+      var x = PAGE.m + pad, w = W - pad * 2;
+      var hh = head(title, x, y + pad, w, false);
+      var bh = body(x, y + pad + hh, w, false);
+      var total = pad * 2 + hh + bh;
+      if (dr) {
+        if (shaded) { doc.setFillColor(C_SHADE[0], C_SHADE[1], C_SHADE[2]); doc.rect(PAGE.m, y, W, total, 'F'); }
+        head(title, x, y + pad, w, true);
+        body(x, y + pad + hh, w, true);
+      }
+      return total;
+    }
+
+    function songBody(x, y, w, dr) {
+      var tl = wrap(d.song || 'Not provided', d.song ? 'bold' : 'normal', 13, w);
+      var yy = y;
+      if (dr) { font(d.song ? 'bold' : 'normal', 13, d.song ? C_INK : C_NA); doc.text(tl, x, yy + sz(13)); }
+      yy += tl.length * lh(13) + 1 * scale;
+      var al = wrap(d.artist || 'Not provided', 'normal', 10, w);
+      if (dr) { font('normal', 10, d.artist ? C_INK : C_NA); doc.text(al, x, yy + sz(10)); }
+      yy += al.length * lh(10) + 4 * scale;
+      yy += grid([{ label: 'Writer(s)', value: d.writers }, { label: 'Publisher(s)', value: d.publishers }], 2, x, yy, w, dr);
+      return yy - y;
+    }
+
+    function itemsBody(x, y, w, dr) {
+      if (!res.warnings.length) {
+        var nl = wrap(NONE_TEXT, 'normal', 8.5, w);
+        if (dr) { font('normal', 8.5, C_SUB); doc.text(nl, x, y + sz(8.5)); }
+        return nl.length * lh(8.5);
+      }
+      var gap = 16 * scale, cw = (w - gap) / 2, ind = 9 * scale;
+      var half = Math.ceil(res.warnings.length / 2);
+      var cols = [res.warnings.slice(0, half), res.warnings.slice(half)];
+      var maxH = 0;
+      cols.forEach(function (list, ci) {
+        var cx = x + ci * (cw + gap), yy = y;
+        list.forEach(function (r) {
+          var ls = wrap(r.text, 'normal', 8.5, cw - ind);
+          if (dr) {
+            font('normal', 8.5, C_INK);
+            doc.setFillColor(C_INK[0], C_INK[1], C_INK[2]);
+            doc.circle(cx + 2.5 * scale, yy + sz(8.5) * 0.68, 1.2 * scale, 'F');
+            doc.text(ls, cx + ind, yy + sz(8.5));
+          }
+          yy += ls.length * lh(8.5) + 3 * scale;
+        });
+        maxH = Math.max(maxH, yy - y - 3 * scale);
+      });
+      return maxH;
+    }
+
+    function footerBox() {
+      var lines = wrap(FOOTER_TEXT, 'normal', 7.5, W);
+      var h = lines.length * lh(7.5) + 8 * scale;
+      return { lines: lines, top: PAGE.h - PAGE.m - h };
+    }
+
+    // Lays the whole page out from the top. With dr false it only measures. Returns where the content ends.
+    function layout(dr) {
+      var y = PAGE.m;
+      var rx = PAGE.m + W;
+      if (dr) {
+        font('bold', 19, C_INK);
+        doc.text('Sync License Quote Request', PAGE.m, y + sz(19));
+        font('normal', 9.5, C_SUB);
+        doc.text('Composition (sync) rights only', PAGE.m, y + sz(19) + lh(9.5) + 2 * scale);
+        var r1 = y + sz(7), r2 = r1 + lh(9.5), r3 = r2 + lh(7) + 2 * scale, r4 = r3 + lh(9.5);
+        font('normal', 7, C_GRAY); doc.text('Date of request', rx, r1, { align: 'right' });
+        font(d.reqDate ? 'bold' : 'normal', 9.5, d.reqDate ? C_INK : C_NA); doc.text(pdfText(d.reqDate || 'Not specified'), rx, r2, { align: 'right' });
+        font('normal', 7, C_GRAY); doc.text('Response needed by', rx, r3, { align: 'right' });
+        font(d.needBy ? 'bold' : 'normal', 9.5, d.needBy ? C_INK : C_NA); doc.text(pdfText(d.needBy || 'Not specified'), rx, r4, { align: 'right' });
+      }
+      var headH = 48 * scale;
+      if (dr) hr(PAGE.m, y + headH, W, C_INK, 1.2);
+      y += headH + 10 * scale;
+      var gapY = 9 * scale;
+
+      y += block('Requester', false, function (x, yy, w, dr2) {
+        return grid([{ label: 'Name', value: d.name }, { label: 'Company', value: d.company }, { label: 'Role', value: d.role }, { label: 'Email', value: d.email }, { label: 'Phone', value: d.phone }], 3, x, yy, w, dr2);
+      }, y, dr) + gapY;
+
+      y += block('Song', false, songBody, y, dr) + gapY;
+
+      y += block('Project', false, function (x, yy, w, dr2) {
+        return grid([{ label: 'Project name', value: d.project, span: 3 }, { label: 'Production company / client', value: d.prodco }, { label: 'Distributor / network', value: d.distributor }, { label: 'Release or air date', value: d.release }, { label: 'Description', value: d.projdesc, span: 3 }], 3, x, yy, w, dr2);
+      }, y, dr) + gapY;
+
+      y += block('Usage', false, function (x, yy, w, dr2) {
+        return grid([{ label: 'Usage type', value: d.usageType }, { label: 'Manner of use', value: d.manner }, { label: 'Duration of use', value: d.duration }, { label: 'Scene / use description', value: d.scene, span: 3 }], 3, x, yy, w, dr2);
+      }, y, dr) + gapY;
+
+      y += block('Terms', true, function (x, yy, w, dr2) {
+        return grid([{ label: 'Media', value: d.media, span: 4 }, { label: 'Territory', value: d.territory }, { label: 'Term', value: d.term }, { label: 'Exclusivity', value: d.exclusivity }, { label: 'Proposed budget', value: d.budget }], 4, x, yy, w, dr2);
+      }, y, dr) + gapY;
+
+      y += block('Items for publisher to confirm', false, itemsBody, y, dr);
+      return y;
+    }
+
+    // Use the largest text size that keeps everything on one page, down to a floor of 60%.
+    for (scale = 1; scale >= 0.6; scale = Math.round((scale - 0.05) * 100) / 100) {
+      if (layout(false) <= footerBox().top - 8) break;
+    }
+    if (scale < 0.6) scale = 0.6;
+
+    layout(true);
+    var foot = footerBox();
+    hr(PAGE.m, foot.top - 4 * scale, W, C_RULE, 0.6);
+    font('normal', 7.5, C_SUB);
+    doc.text(foot.lines, PAGE.m, foot.top + sz(7.5));
+    return doc;
+  }
+
+  // ----- Copied summary: the same content as plain text -----
+  function summaryText(res, d) {
+    var L = [];
+    function row(label, value, fallback) { L.push(label + ': ' + (value || fallback || 'Not provided')); }
+    if (res.errors.length) {
+      L.push('INCOMPLETE: required information is missing.');
+      res.errors.forEach(function (r) { L.push('- ' + r.text); });
+      L.push('');
+    }
+    L.push('SYNC LICENSE QUOTE REQUEST', 'Composition (sync) rights only', '');
+    row('Date of request', d.reqDate, 'Not specified');
+    row('Response needed by', d.needBy, 'Not specified');
+    L.push('', 'REQUESTER');
+    row('Name', d.name); row('Company', d.company); row('Role', d.role); row('Email', d.email); row('Phone', d.phone);
+    L.push('', 'SONG');
+    row('Song title', d.song); row('Artist', d.artist); row('Writer(s)', d.writers); row('Publisher(s)', d.publishers);
+    L.push('', 'PROJECT');
+    row('Project name', d.project); row('Production company / client', d.prodco); row('Distributor / network', d.distributor);
+    row('Release or air date', d.release); row('Description', d.projdesc);
+    L.push('', 'USAGE');
+    row('Usage type', d.usageType); row('Manner of use', d.manner); row('Duration of use', d.duration); row('Scene / use description', d.scene);
+    L.push('', 'TERMS');
+    row('Media', d.media); row('Territory', d.territory); row('Term', d.term); row('Exclusivity', d.exclusivity); row('Proposed budget', d.budget);
+    L.push('', 'ITEMS FOR PUBLISHER TO CONFIRM');
+    if (res.warnings.length) res.warnings.forEach(function (r) { L.push('- ' + r.text); }); else L.push(NONE_TEXT);
+    L.push('', FOOTER_TEXT);
+    return L.join('\n');
+  }
+
+  // ----- Messages and button actions -----
+  var toastTimer;
+  function toast(msg) {
+    var t = el('toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 4500);
+  }
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function showCopyBox(text) {
+    var ta = el('copyText');
+    ta.value = text;
+    el('copyBox').hidden = false;
+    ta.focus();
+    ta.select();
+  }
+  function closeCopyBox() { el('copyBox').hidden = true; el('btnCopy').focus(); }
+
+  btnDownload.addEventListener('click', function () {
+    render();
+    if (lastErrors.length || !pdfReady()) return;
+    var d = display();
+    try {
+      buildPdf(evaluate(read()), d).save(fileName(d));
+      toast('PDF created. If it did not download, check your browser’s download settings.');
+    } catch (e) {
+      toast('The PDF could not be created. Reload the page and try again.');
+    }
+  });
+
+  el('btnCopy').addEventListener('click', function () {
+    render();
+    var text = summaryText(evaluate(read()), display());
+    function fallback() { if (legacyCopy(text)) toast('Summary copied.'); else showCopyBox(text); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('Summary copied.'); }, fallback);
+    } else {
+      fallback();
+    }
+  });
+  el('btnCopyClose').addEventListener('click', closeCopyBox);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !el('copyBox').hidden) closeCopyBox(); });
+
+  el('btnPrint').addEventListener('click', function () {
+    render();
+    if (lastErrors.length) return;
+    try { window.print(); } catch (e) { toast('Printing is not available here.'); }
+  });
+
+  // ---------- Load example and Clear form ----------
+  function isoDate(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+
+  // Sends the events the form listens for, so conditional boxes, counters and messages all update.
+  function fire(node) {
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+    node.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function refreshAll() {
+    document.querySelectorAll('#requestForm input, #requestForm select, #requestForm textarea').forEach(fire);
+    touched = {};
+    attempted = false;
+    render();
+  }
+  function setField(id, value) { el(id).value = value; }
+
+  function loadExample() {
+    form.reset();
+    var today = new Date();
+    var reply = new Date(today); reply.setDate(reply.getDate() + 14);
+    var release = new Date(today); release.setMonth(release.getMonth() + 9);
+
+    setField('f-name', 'Jordan Example');
+    setField('f-email', 'jordan@example.com');
+    setField('f-company', 'Example Pictures');
+    setField('f-role', 'Music supervisor');
+    setField('f-reqdate', isoDate(today));
+    setField('f-needby', isoDate(reply));
+
+    setField('f-song', 'Paper Lanterns');
+    setField('f-artist', 'The Marigold Hours');
+    setField('f-writers', 'Sam Fictional');
+
+    setField('f-project', 'Harbor Lights');
+    setField('f-prodco', 'Example Pictures');
+    setField('f-release', isoDate(release));
+    setField('f-projdesc', 'A fictional drama used to show how the form works.');
+
+    setField('f-usagetype', 'Feature film');
+    setField('f-manner', 'Visual vocal');
+    setField('f-duration', '45');
+    setField('f-scene', 'Closing scene on the harbor at dusk.');
+
+    document.querySelectorAll('input[name="media"]').forEach(function (c) {
+      c.checked = (c.value === 'Theatrical' || c.value === 'Streaming/VOD');
+    });
+    setField('f-territory', 'Worldwide');
+    setField('f-term', '5 years');
+    setField('f-exclusivity', 'None');
+    setField('f-budget', '5000');
+    setField('f-currency', 'USD');
+
+    refreshAll();
+    el('exampleTag').hidden = false;
+    toast('Example loaded. Every name in it is fictional.');
+  }
+
+  function clearForm() {
+    form.reset();
+    setField('f-reqdate', isoDate(new Date()));
+    refreshAll();
+    el('exampleTag').hidden = true;
+    toast('Form cleared.');
+  }
+
+  // Typing in any field removes the "Example data" tag. Only real edits count, not the code above.
+  el('requestForm').addEventListener('input', function (e) { if (e.isTrusted) el('exampleTag').hidden = true; });
+  el('requestForm').addEventListener('change', function (e) { if (e.isTrusted) el('exampleTag').hidden = true; });
+
+  function closeClearBox() { el('clearBox').hidden = true; el('btnClear').focus(); }
+  el('btnExample').addEventListener('click', loadExample);
+  el('btnClear').addEventListener('click', function () {
+    el('clearBox').hidden = false;
+    el('btnClearCancel').focus();
+  });
+  el('btnClearCancel').addEventListener('click', closeClearBox);
+  el('btnClearConfirm').addEventListener('click', function () { el('clearBox').hidden = true; clearForm(); el('btnClear').focus(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !el('clearBox').hidden) closeClearBox(); });
+
+  // ---------- How this works ----------
+  // Plain-English triggers for each rule. The messages themselves come straight from RULES.
+  var WHEN = {
+    E1: 'Full name is blank', E2: 'Email is blank', E3: 'Email is not in a valid format (needs text, @, a domain and a dot)',
+    E4: 'Date of request is blank', E5: 'Song title is blank', E6: 'Artist is blank', E7: 'Project name is blank',
+    E8: 'Usage type is not selected', E9: 'Usage type is "Other" and the text box is blank',
+    E10: 'Duration is blank, zero, negative or not a whole number', E11: 'No media box is checked',
+    E12: 'Territory is not selected', E13: 'Territory is "Specific countries/regions" and the text box is blank',
+    E14: 'Term is not selected', E15: 'Term is "Custom" and months is blank, zero or not a whole number',
+    E16: 'Response-needed-by date is earlier than the request date', E17: 'Budget is negative',
+    W1: 'Company is blank', W2: 'Role is not selected', W3: 'Response-needed-by date is blank', W4: 'Writer(s) is blank',
+    W5: 'Publisher(s) is blank', W6: 'Production company / client is blank',
+    W7: 'Release date is blank and "Not yet determined" is unchecked', W8: 'Manner of use is not selected',
+    W9: 'Scene description is blank', W10: 'Exclusivity is not selected',
+    W11: 'Exclusivity is anything other than "None" and the scope box is blank',
+    W12: 'Budget is blank and "No budget set yet" is unchecked',
+    C1: 'Term is Perpetuity and "All media" is not checked',
+    C2: 'Both "All media" and any specific media box are checked',
+    C3: 'Usage type is Feature film, TV series or Trailer/promo and "Internal/non-public" is the only media checked',
+    C4: 'Duration is over 300 seconds (a check against entering minutes by mistake)',
+    C5: 'Territory is "United States only" and media includes Streaming/VOD or Online/web',
+    C6: 'Release date is before the request date',
+    C8: 'Exclusivity is "Full" and Territory is not "Worldwide"',
+    N1: 'A budget amount is entered', N2: 'Always shown'
+  };
+
+  function ruleTable(title, rows) {
+    var wrap = document.createElement('div');
+    var h = document.createElement('h3');
+    h.textContent = title;
+    var box = document.createElement('div');
+    box.className = 'tablewrap';
+    var table = document.createElement('table');
+    var head = document.createElement('thead');
+    head.innerHTML = '<tr><th scope="col">Rule</th><th scope="col">When it appears</th><th scope="col">Message shown</th></tr>';
+    var body = document.createElement('tbody');
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      [r.id, r.when, r.text].forEach(function (txt) {
+        var td = document.createElement('td');
+        td.textContent = txt;
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    table.appendChild(head);
+    table.appendChild(body);
+    box.appendChild(table);
+    wrap.appendChild(h);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  function buildRulesTables() {
+    var holder = el('rulesTables');
+    holder.textContent = '';
+    function pick(test) {
+      return RULES.filter(test).map(function (r) { return { id: r.id, when: WHEN[r.id] || '', text: r.text }; });
+    }
+    var consistency = pick(function (r) { return r.group === 'consistency'; });
+    // C7 has no entry in RULES because it cannot occur. It is listed here so the numbering has no gap.
+    var c7 = { id: 'C7', when: 'No budget set yet is checked and an amount is also entered', text: 'Cannot occur. The form turns off the amount box when that checkbox is checked.' };
+    consistency.splice(consistency.map(function (r) { return r.id; }).indexOf('C8'), 0, c7);
+    holder.appendChild(ruleTable('Errors (block the PDF and Print)', pick(function (r) { return r.level === 'error'; })));
+    holder.appendChild(ruleTable('Warnings: missing recommended fields', pick(function (r) { return r.group === 'missing'; })));
+    holder.appendChild(ruleTable('Warnings: consistency checks, phrased as questions for the publisher', consistency));
+    holder.appendChild(ruleTable('Notes (on screen only)', pick(function (r) { return r.level === 'note'; })));
+  }
+
+  function showHow(on) {
+    layout.hidden = on;
+    el('howView').hidden = !on;
+    document.querySelector('.mobilebar').hidden = on;
+    document.body.classList.toggle('how-open', on);
+    window.scrollTo(0, 0);
+    if (on) el('btnBackTop').focus({ preventScroll: true }); else el('btnHow').focus({ preventScroll: true });
+  }
+  el('btnHow').addEventListener('click', function () { showHow(true); });
+  el('btnBackTop').addEventListener('click', function () { showHow(false); });
+  el('btnBackBottom').addEventListener('click', function () { showHow(false); });
+  buildRulesTables();
+
+  // ---------- Wiring ----------
+  var form = el('requestForm');
+  form.addEventListener('input', render);
+  form.addEventListener('change', render);
+  form.addEventListener('focusout', function (e) {
+    var t = e.target;
+    var id = t.id;
+    if (t.name === 'media') {
+      var group = el('grp-media');
+      if (group.contains(e.relatedTarget)) return;
+      id = 'grp-media';
+    }
+    if (!id) return;
+    touched[id] = true;
+    render();
+  });
+
+  el('btnFirstError').addEventListener('click', function () {
+    attempted = true;
+    setView('form');
+    render();
+    var target = firstErrorTarget(lastErrors);
+    if (!target) return;
+    var control = el(target);
+    control.scrollIntoView({ block: 'center' });
+    var focusable = control.tagName === 'FIELDSET' ? control.querySelector('input') : control;
+    if (focusable) focusable.focus({ preventScroll: true });
+  });
+
+  el('btnItems').addEventListener('click', function () {
+    setView('preview');
+    var panel = el('itemsPanel');
+    panel.scrollIntoView({ block: 'start' });
+    panel.focus({ preventScroll: true });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
